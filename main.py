@@ -7,9 +7,41 @@ def main():
 
     device = 0
     capture = cv2.VideoCapture(device)
-    calibrateCamera(capture)
-    #waitForStabilization(capture)
+    M = calibrateCamera(capture)
 
+    ok, frame = capture.read()
+    while True:
+        ok, frame = capture.read()
+
+        # Convert dimensions of frame into array of corners
+        corners = getCorners(frame)
+
+        # Get the location size of the transformed corners
+        boxOrig, boxDims = getBoundingBox(img1Corners, M)
+
+        # make a canvas for the rectified frame
+        rectified = numpy.zeros( (boxDims[1], boxDims[0], 3), dtype='uint8' )
+
+        # Transform the original image using the homography in addition to the 
+        # translation
+        cv2.warpPerspective(frame, M, tuple(boxDims), rectified)
+
+        cv2.imshow('recified_frame', rectified)
+
+# Given an image, return an array of the corner location
+def getCorners(img):
+    h,w,d = img.shape
+    return numpy.array( [ [[ 0, 0 ]],
+                       [[ w, 0 ]],
+                       [[ w, h ]],
+                       [[ 0, h ]] ], dtype='float32' )
+
+# Given a set of corners and a homography, determine the bounding box for 
+# the transformation
+def getBoundingBox(corners, M):
+    transImgCorners = cv2.perspectiveTransform(corners,M)
+    box = cv2.boundingRect(transImgCorners)
+    return box[0:2], box[2:4]
 
 def calibrateCamera(device):
     h, w = 1000,1000
@@ -77,7 +109,7 @@ def calibrateCamera(device):
 
     #now we get a homography using collected points
     homography = cv2.findHomography(numpy.array(image_points), numpy.array(circle_floats))
-    print homography
+    return homography
 
 
 #new implementation using eroding (original implementation commented out
