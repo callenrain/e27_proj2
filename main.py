@@ -3,134 +3,137 @@ import numpy
 import sys
 import cvk2
 
-"""
-GAME STATE NEEDED
-    Current image of the board
-    Current state of the board (where lines are)
-    Current turn
-    Score for each player
-    Color for each player
-
-DISPLAY ITEMS NEEDED
-    Score for each player
-    Current turn
-    Dots, lines, boxes
-
-STEPS OF GAME PLAY
-
-    LOOP:
-        Detect obstruction
-        If no obstruction (erode and check residual)
-            check feed and compare to current state
-            if feed is different from known state
-                Pattern match for vertical or horizontal line
-                locate area of move
-                play move
-                check for box
-                if box was not created
-                    switch player
-"""
 
 # MAGIC NUMBERS
-FRAME_H, FRAME_W = 1000, 1000
-CALIBRATE_DIM = 3
+NUM_STABILIZATION_FRAMES = 5
 CALIBRATE_SIZE = 15
 GAME_DIM = 10
+FRAME_H, FRAME_W = 700,700
+OFFSET = 25
+LINE_THICKNESS = 10
 
 def main():
     device = 0
     capture = cv2.VideoCapture(device)
-    M = calibrateCamera(capture)
-    print M
-    showRectifiedFeed(capture, M)
 
-def showRectifiedFeed(capture, M):
-    ok, frame = capture.read()
+    # get a homography and the edges of the board
+    M, corners = calibrateCamera(capture)
 
-    # Convert dimensions of frame into array of corners
-    corners = getCorners(frame)
+    # get the box that bounds the board
+    box = getRectifiedBox(corners)
 
-    # Get the location size of the transformed corners
-    boxOrig, boxDims = getBoundingBox(corners, M)
+    # get the game board with lines drawn
+    board = getGameBoard()
 
-    # make a canvas for the rectified frame
-    rectified = numpy.zeros( (boxDims[1], boxDims[0], 3), dtype='uint8' )
+    # keeps track of the moves made so far
+    entries = [[None, None, None], [None, None, None], [None, None, None]]
 
+    # TODO: need to create templates based on the size of the box
+
+    # obtain a starting reference image
+    for i in range(10):
+        cv2.imshow("board", board)
+        reference = getRectifiedImg(capture, M, box)
+
+    # main game look
     while True:
-        ok, frame = capture.read()
+        cv2.imshow("board", board)
+        current = getRectifiedImg(capture, M, box)
+        print isNotObstructed(current, reference)
+        # if not obstructed
+            # check for end of game scenario
+            # check for marks
+            # if mark is found, match templates
+            # if we can classify mark, update the entry list
+            # update reference image
 
-        # Transform the original image using the homography in addition to the 
-        # translation
-        rectified = cv2.warpPerspective(frame, M, tuple(boxDims))
-        print "warping frame"
-        cv2.imshow('recified_frame', rectified)
+# determines if there is a large object in the way of the reference image
+def isNotObstructed(current, reference):
+    # change to grayscale
+    current = cv2.cvtColor(current, cv2.COLOR_RGB2GRAY)
+    reference = cv2.cvtColor(reference, cv2.COLOR_RGB2GRAY)
 
-# Given an image, return an array of the corner location
-def getCorners(img):
-    h,w,d = img.shape
-    return numpy.array( [ [[ 0, 0 ]],
-                       [[ w, 0 ]],
-                       [[ w, h ]],
-                       [[ 0, h ]] ], dtype='float32' )
+    # take difference of images
+    diff = current.astype('float') - reference.astype('float')
+    
+    # take the absolute value of the difference and use a high threshold
+    norm_diff = numpy.sqrt(diff*diff).astype('uint8')
+    mask = cv2.threshold(norm_diff.astype('uint8'), 150, 255, cv2.THRESH_BINARY)[1]
 
-# Given a set of corners and a homography, determine the bounding box for 
-# the transformation
-def getBoundingBox(corners, M):
-    transImgCorners = cv2.perspectiveTransform(corners,M)
-    box = cv2.boundingRect(transImgCorners)
-    return box[0:2], box[2:4]
+    # erode the iamge so that only large objects remain
+    size = 20
+    elt = cv2.getStructuringElement(cv2.MORPH_RECT,(size,size))
+    mask = cv2.erode(mask, elt)
 
+    #return whether there is an obstruction or not
+    return numpy.sum(mask) == 0
+
+# draws the lines for tic tac toe
+def getGameBoard():
+    board = numpy.empty((FRAME_H, FRAME_W, 3))
+    board[:] = (255, 255, 255)
+    cv2.line(board, (FRAME_W/3, 0), (FRAME_W/3, FRAME_H), (0, 0, 0), (LINE_THICKNESS))
+    cv2.line(board, (2*FRAME_W/3, 0), (2*FRAME_W/3, FRAME_H), (0, 0, 0), (LINE_THICKNESS))
+    cv2.line(board, (0, FRAME_H/3), (FRAME_W, FRAME_H/3), (0, 0, 0), (LINE_THICKNESS))
+    cv2.line(board, (0, 2*FRAME_H/3), (FRAME_W, 2*FRAME_H/3), (0, 0, 0), (LINE_THICKNESS))
+    return board
+
+# gets the bounding box from the corners of the rectified frame
+def getRectifiedBox(corners):
+    return cv2.boundingRect(corners.astype('float32'))
+
+# get the rectified image from the bounding box, the camera frame, and the homography
+def getRectifiedImg(capture, M, box):
+    x, y, w, h = box[0], box[1], box[2], box[3]
+    ok, frame = capture.read()
+    sm_frame = frame[0:y+h+OFFSET, 0:x+w +OFFSET]
+    rectified = cv2.warpPerspective(sm_frame, M, (FRAME_W, FRAME_H))
+    return rectified
+
+# use a sequence of dots to obtain a homography and the outline of the board
 def calibrateCamera(device):
-    FRAME_H, FRAME_W = 1000,1000
+
     white_grid = numpy.empty((FRAME_H, FRAME_W, 3))
     white_grid[:] = (255,255,255)
     
-    circles = []
+    circles = [(OFFSET, OFFSET), (FRAME_W/2, OFFSET), (FRAME_W-OFFSET, OFFSET), \
+                (OFFSET, FRAME_H/2), (FRAME_W/2, FRAME_H/2), (FRAME_W-OFFSET, FRAME_H/2), \
+                (OFFSET, FRAME_H-OFFSET), (FRAME_W/2, FRAME_H-OFFSET), (FRAME_W-OFFSET, FRAME_H-OFFSET)]
 
-    for i in range(1, CALIBRATE_DIM+1):
-        for j in range(1, CALIBRATE_DIM+1):
-            circles.append((j*(FRAME_H/(CALIBRATE_DIM+1)), i*(FRAME_W/(CALIBRATE_DIM+1))))
-
-    #will be the destination points used in the homgraphy
-    #image_points = numpy.empty((0, 1, 2), dtype='float32')
+    corners = [(OFFSET, OFFSET), (FRAME_W-OFFSET, OFFSET), \
+                (OFFSET, FRAME_H-OFFSET), (FRAME_W-OFFSET, FRAME_H-OFFSET)]
+    
+    # the detected locations of the dots
+    trans_corners = []
+    
+    #the destination points used in the homgraphy
     image_points = []
 
     #needed to index image_points array down below
     for circle in circles:
-        dot_grid = numpy.empty((FRAME_H, FRAME_W, 3))
+
+        dot_grid = numpy.empty((FRAME_W, FRAME_H, 3))
         dot_grid[:] = (255,255,255)
         cv2.circle(dot_grid, circle, CALIBRATE_SIZE, (0,0,0), -1)
         
-        cv2.imshow('white_grid', white_grid)
-
-        #try to think of a way to get a good averaged image that
-        #we can use to background subtract each stable image
+        cv2.imshow('calibration', white_grid)
 
         #for now, this will be the stable blank image we use
         blank_frame = waitForStabilization(device)
         cv2.waitKey(10)
 
-        cv2.imshow("dot", dot_grid)
+        cv2.imshow("calibration", dot_grid)
         dot_frame = waitForStabilization(device)
-        cv2.waitKey(10)
-
-        # cv2.imshow('white_grid', blank_frame)
-        # cv2.waitKey(-1)
-
-        # cv2.imshow('white_grid', dot_frame)
-        # cv2.waitKey(-1)
+        cv2.waitKey(100)
 
         #background subtraction
         diff = blank_frame.astype('float') - dot_frame.astype('float')
         norm_diff = numpy.sqrt(diff*diff).astype('uint8')
 
-        # cv2.imshow('white_grid', norm_diff)
-        # cv2.waitKey(-1)
-
-        #threshold this image (need to figure good values)
+        #threshold this image 
         mask = cv2.threshold(norm_diff, 50, 255, cv2.THRESH_BINARY)[1]
 
-        #dilate
+        # erode and then dilate
         size = 5
         elt = cv2.getStructuringElement(cv2.MORPH_RECT,(size,size))
         mask = cv2.erode(mask, elt)
@@ -150,22 +153,27 @@ def calibrateCamera(device):
         #add point to array
         image_points.append(info['mean'])
 
-        #numpy.insert(image_points, len(image_points), info['mean'], axis=0)
+        if (circle in corners):
+            trans_corners.append(info['mean'])
 
+    cv2.destroyAllWindows()
 
+    # convert everything to the format needed later on
     circle_floats = [[float(x), float(y)] for x,y in circles]
+    trans_corners = [[[float(x), float(y)]] for x,y in trans_corners]
 
     #now we get a homography using collected points
     homography = cv2.findHomography(numpy.array(image_points), \
         numpy.array(circle_floats))
-    return homography[0]
+
+    #return the homography and the boundaries of the board
+    return homography[0], numpy.array(trans_corners)
 
 
 #new implementation using eroding (original implementation commented out
 #below. We still need to figure out a way to get a good inital average
 #image to do background subtraction
 def waitForStabilization(capture):
-    NUM_FRAMES = 5
     ok, frame = capture.read()
 
     w = frame.shape[1]
@@ -177,13 +185,13 @@ def waitForStabilization(capture):
     while 1:
         new_avg = numpy.zeros((h, w), 'float')
 
-        for i in range(NUM_FRAMES):
+        for i in range(NUM_STABILIZATION_FRAMES):
             ok, frame = capture.read()
             frame_gray = numpy.empty((h, w), 'uint8')
             frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
             new_avg += frame_gray
 
-        new_avg = (new_avg / NUM_FRAMES).astype('uint8')
+        new_avg = (new_avg / NUM_STABILIZATION_FRAMES).astype('uint8')
 
         diff = new_avg.astype(float) - prev_avg.astype(float)
         norm_diff = numpy.sqrt(diff*diff).astype('uint8')
@@ -204,16 +212,6 @@ def waitForStabilization(capture):
         else: 
             label = "UNSTABLE"
 
-        # cv2.putText(mask, label, (16, h-16),
-        #        cv2.FONT_HERSHEY_SIMPLEX, 1.0,
-        #        (0,0,0), 3, cv2.CV_AA)
-
-        # cv2.putText(mask, label, (16, h-16),
-        #        cv2.FONT_HERSHEY_SIMPLEX, 1.0,
-        #        (255,255,255), 1, cv2.CV_AA)
-
-
-        # cv2.imshow('Video', mask)
         prev_avg = new_avg
 
 
