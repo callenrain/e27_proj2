@@ -39,6 +39,8 @@ def main():
     while True:
         cv2.imshow("board", board)
         current = getRectifiedImg(capture, M, box)
+        cv2.imshow("camera", current)
+
         print isNotObstructed(current, reference)
         # if not obstructed
             # check for end of game scenario
@@ -95,6 +97,9 @@ def calibrateCamera(device):
 
     white_grid = numpy.empty((FRAME_H, FRAME_W, 3))
     white_grid[:] = (255,255,255)
+
+    cv2.imshow('calibration', white_grid)
+    cv2.waitKey(-1)
     
     circles = [(OFFSET, OFFSET), (FRAME_W/2, OFFSET), (FRAME_W-OFFSET, OFFSET), \
                 (OFFSET, FRAME_H/2), (FRAME_W/2, FRAME_H/2), (FRAME_W-OFFSET, FRAME_H/2), \
