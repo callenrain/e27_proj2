@@ -15,6 +15,14 @@ BOARD_COLOR = (0, 0, 0)
 ALTERNATE_COLOR = (255, 255, 255)
 
 def main():
+    X, O = getTemplates()
+    for x in X:
+        cv2.imshow("X", x)
+        cv2.waitKey(-1)
+    for o in O:
+        cv2.imshow("O", o)
+        cv2.waitKey(-1)
+
     device = 0
     capture = cv2.VideoCapture(device)
 
@@ -42,7 +50,7 @@ def main():
     entries = [[None, None, None], [None, None, None], [None, None, None]]
 
     # TODO: need to create templates based on the size of the box
-
+    templates = getTemplates()
 
 
     #cv2.imshow("board", board)
@@ -71,6 +79,29 @@ def main():
             # if mark is found, match templates
             # if we can classify mark, update the entry list
             # update reference image
+
+# generate the templates for tic tac toe
+def getTemplates():
+    X, O = [], []
+    for size in [.9, .8, .7]:
+        for thickness in [4, 2, 1]:
+            width = int(size*FRAME_H/3)
+
+            template = numpy.zeros((width, width))
+
+            #generate an X
+            cv2.line(template, (0, 0), (width, width), ALTERNATE_COLOR, thickness)
+            cv2.line(template, (0, width), (width, 0), ALTERNATE_COLOR, thickness)
+            X.append(template)
+
+            template = numpy.zeros((width, width))
+
+            #generate an O
+            cv2.circle(template, (int(size*FRAME_H/6), int(size*FRAME_H/6)), int(size*FRAME_H/6)-5, ALTERNATE_COLOR, thickness)
+            O.append(template)
+    return X, O
+
+
 
 # determines if there is a large object in the way of the reference image
 def isNotObstructed(current, reference):
