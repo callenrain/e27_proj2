@@ -2,7 +2,10 @@ import cv2
 import numpy
 import sys
 import cvk2
-
+# Lab 2: Tic-Tac-Toe
+# Callen Rain and Dylan Jeffers
+# Computer Vision Spring 2015 
+# Lisence: GPLv3
 
 # MAGIC NUMBERS
 NUM_STABILIZATION_FRAMES = 5
@@ -16,9 +19,10 @@ BOARD_COLOR = (0, 0, 0)
 ALTERNATE_COLOR = (255, 255, 255)
 
 def main():
+	#obtains two lists of templates
     X, O = getTemplates()
 
-
+	#setting up video capture for webcam
     device = 0
     capture = cv2.VideoCapture(device)
 
@@ -33,14 +37,9 @@ def main():
 
     # keeps track of the moves made so far
     entries = [[None, None, None], [None, None, None], [None, None, None]]
-
-    # TODO: need to create templates based on the size of the box
-    templates = getTemplates()
-
+	
+	#obtains computer-generated board we use to maintain current game state
     feedback_board = getFeedbackBoard()
-
-    #cv2.imshow("board", board)
-    #cv2.waitKey(-1)
 
     # obtain a starting reference image
     for i in range(30):
@@ -48,31 +47,38 @@ def main():
         cv2.moveWindow("board", 100, 300)
         reference = getRectifiedImg(capture, M, box)
 
-    # main game look
+    # main game loop
+	
     while True:
+
+		# printing the 3 boards (draw board, rectified image, and CG game-state
+		# and move them into position
         cv2.imshow("board", board)
         cv2.imshow("feedback_board", feedback_board)
         cv2.moveWindow("feedback_board", 1320, 300)
-        #cv2.moveWindow("board", 100, 300)
         current = getRectifiedImg(capture, M, box)
         cv2.moveWindow("camera", 710, 300)
-
+		
+		#determine if image is obstructed
         obstruction = isObstructed(current, reference)
-
+		
         if obstruction: printOnImage(current, "OBSTRUCTED")
 
         cv2.imshow("camera", current)
 
-        if not obstruction:
-            # check for end of game scenario
+	    if not obstruction:
+			#check to see if move has occured
             index, symbol = checkForMoves(current, reference, X, O)
+
+			#if mark was found
             if index != None:
-                letter = 'O' if symbol == True else 'X'
+				#update our reference image
                 reference = current
                 entries[index/3][index % 3] = symbol
-
+				#update the CG board
                 updateFeedbackBoard(feedback_board, (index/3, index % 3), symbol)
 
+				#check for a winner or a stalmate
                 isWinner = checkWinner(entries, feedback_board)
                 if isWinner != None:
                     winner = 'O' if isWinner == True else 'X'
@@ -81,34 +87,34 @@ def main():
                 if checkStalemate(entries):
                     print "stalemate"
 
-                # check for marks
-                # if mark is found, match templates
-                # if we can classify mark, update the entry list
-                # update reference image
-
+                
+# this funtion checks the current state of the board and determines if there
+# is a winner 
 def checkWinner(entries, feedback_board):
-    unit = FRAME_H/3
-
+  #used for easy computation 
+   unit = FRAME_H/3
+	#checks rows for winner
     for e, i in enumerate(entries):
         if i[0] == i[1] and i[0] == i[2] and i[0] != None:
             cv2.line(feedback_board, (0, e*unit+unit/2), (unit*3, e*unit+unit/2), (0, 0, 255), (LINE_THICKNESS))
             return i[0]
-
+	# checks columns for winner
     for i in range(3):
         if entries[0][i] == entries[1][i] and entries[0][i] == entries[2][i] and entries[0][i]!=None:
             cv2.line(feedback_board, (i*unit+unit/2, 0), (i*unit+unit/2, unit*3), (0, 0, 255), (LINE_THICKNESS))
             return entries[0][i]
-
+	# checks top left diagonal for winner
     if entries[0][0] == entries[1][1] and entries[0][0] == entries[2][2] and entries[0][0] != None:
         cv2.line(feedback_board, (0, 0), (unit*3, unit*3), (0, 0, 255), (LINE_THICKNESS))
         return entries[0][0]
-
+	# checks top right diagonal for winner
     if entries[0][2] == entries[1][1] and entries[0][2] == entries[2][0] != None:
         cv2.line(feedback_board, (unit*3, 0), (0, unit*3), (0, 0, 255), (LINE_THICKNESS))
         return entries[0][2]  
 
-    return None      
+    return None     
 
+# checks to see if all boxes are filled, which indicates a stalemate
 def checkStalemate(entries):
     for i in entries:
         for j in i:
@@ -116,6 +122,7 @@ def checkStalemate(entries):
                 return False
     return True
 
+# checks the current frame and determines if an X or O was drawn. 
 def checkForMoves(current, reference, X, O):
     current = cv2.cvtColor(current, cv2.COLOR_RGB2GRAY)
     reference = cv2.cvtColor(reference, cv2.COLOR_RGB2GRAY)
@@ -224,6 +231,7 @@ def isObstructed(current, reference):
     #return whether there is an obstruction or not
     return numpy.sum(mask) != 0
 
+# updates the feedback board (the board that prints the current state of the board) after a new move is made.
 def updateFeedbackBoard(feedback_board, location, symbol):
     i, j = location
 
@@ -237,7 +245,7 @@ def updateFeedbackBoard(feedback_board, location, symbol):
         cv2.line(feedback_board, (unit*j, unit*i), (unit*j+unit, unit*i+unit), BOARD_COLOR, LINE_THICKNESS)
         cv2.line(feedback_board, (unit*j, unit*i+unit), (unit*j+unit, unit*i), BOARD_COLOR, LINE_THICKNESS)
 
-
+# initializes the feeback board, the board that shows the current state of the game
 def getFeedbackBoard():
     board = numpy.empty((FEEDBACK_SIZE, FEEDBACK_SIZE, 3))
     board[:] = ALTERNATE_COLOR
@@ -247,7 +255,7 @@ def getFeedbackBoard():
     cv2.line(board, (0, 2*FEEDBACK_SIZE/3), (FEEDBACK_SIZE, 2*FEEDBACK_SIZE/3), BOARD_COLOR, (LINE_THICKNESS))
     return board
 
-# draws the lines for tic tac toe
+# intializes the main game board that is drawn on
 def getGameBoard():
     board = numpy.empty((FRAME_H, FRAME_W, 3))
     board[:] = BOARD_COLOR
@@ -269,7 +277,7 @@ def getRectifiedImg(capture, M, box):
     rectified = cv2.warpPerspective(sm_frame, M, (FRAME_W, FRAME_H))
     return rectified
 
-# use a sequence of dots to obtain a homography and the outline of the board
+# uses a sequence of dots to obtain a homography and the outline of the board
 def calibrateCamera(device):
 
     blank_grid = numpy.empty((FRAME_H, FRAME_W, 3))
@@ -325,8 +333,6 @@ def calibrateCamera(device):
         contours = cv2.findContours(mask, cv2.RETR_CCOMP,
                         cv2.CHAIN_APPROX_SIMPLE)
 
-
-
         #get info from contours
         if contours[0] != []:
             info = cvk2.getcontourinfo(contours[0][0])
@@ -354,9 +360,7 @@ def calibrateCamera(device):
     return homography[0], numpy.array(trans_corners)
 
 
-#new implementation using eroding (original implementation commented out
-#below. We still need to figure out a way to get a good inital average
-#image to do background subtraction
+# obtains image used to do background subtraction to establish homography
 def waitForStabilization(capture):
     ok, frame = capture.read()
 
@@ -387,7 +391,6 @@ def waitForStabilization(capture):
         erodeElt = cv2.getStructuringElement(cv2.MORPH_RECT,(erodeSize,erodeSize))
         mask = cv2.erode(mask, erodeElt)
 
-        #still need to figure out a good value (may want to ensure multiple
         #frames pass criteria
         
         if numpy.sum(mask) == 0:
@@ -398,6 +401,7 @@ def waitForStabilization(capture):
 
         prev_avg = new_avg
 
+#copied from tutorial.py, used to print text on our images
 def printOnImage(image, text):
     h = image.shape[0]
     cv2.putText(image, text, (16, h-16), 
