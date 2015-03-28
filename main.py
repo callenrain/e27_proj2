@@ -10,14 +10,27 @@ CALIBRATE_SIZE = 15
 GAME_DIM = 10
 FRAME_H, FRAME_W = 700,700
 OFFSET = 25
-LINE_THICKNESS = 10
+LINE_THICKNESS = 7
+BOARD_COLOR = (0, 0, 0)
+ALTERNATE_COLOR = (255, 255, 255)
 
 def main():
     device = 0
     capture = cv2.VideoCapture(device)
 
     # get a homography and the edges of the board
-    M, corners = calibrateCamera(capture)
+    
+
+    corners = numpy.array([[[ 371.51908397,  138.27226463]],
+         [[ 695.34638197,  150.58600237]],
+         [[ 332.39711465,  501.37661352]],
+         [[ 700.88139535,  507.14496124]]]).astype('float')
+
+    M = numpy.array([[  2.01198912e+00,   2.27148562e-01,  -7.52986677e+02],
+         [ -7.91593761e-02,   2.09536853e+00,  -2.35262232e+02],
+         [ -7.21211720e-05,   3.84060651e-04,   1.00000000e+00]])
+
+    #M, corners = calibrateCamera(capture)
 
     # get the box that bounds the board
     box = getRectifiedBox(corners)
@@ -30,18 +43,28 @@ def main():
 
     # TODO: need to create templates based on the size of the box
 
+
+
+    #cv2.imshow("board", board)
+    #cv2.waitKey(-1)
+
     # obtain a starting reference image
-    for i in range(10):
+    for i in range(30):
         cv2.imshow("board", board)
+        cv2.moveWindow("board", 100, 300)
         reference = getRectifiedImg(capture, M, box)
 
     # main game look
     while True:
         cv2.imshow("board", board)
+        #cv2.moveWindow("board", 100, 300)
         current = getRectifiedImg(capture, M, box)
         cv2.imshow("camera", current)
+        cv2.moveWindow("camera", 800, 300)
 
-        print isNotObstructed(current, reference)
+        if isNotObstructed(current, reference):
+            continue
+        #cv2.imshow("obstruction", obstruction)
         # if not obstructed
             # check for end of game scenario
             # check for marks
@@ -60,24 +83,24 @@ def isNotObstructed(current, reference):
     
     # take the absolute value of the difference and use a high threshold
     norm_diff = numpy.sqrt(diff*diff).astype('uint8')
-    mask = cv2.threshold(norm_diff.astype('uint8'), 150, 255, cv2.THRESH_BINARY)[1]
+    mask = cv2.threshold(norm_diff.astype('uint8'), 50, 255, cv2.THRESH_BINARY)[1]
 
     # erode the iamge so that only large objects remain
-    size = 20
+    size = 10
     elt = cv2.getStructuringElement(cv2.MORPH_RECT,(size,size))
     mask = cv2.erode(mask, elt)
-
+    #return mask
     #return whether there is an obstruction or not
     return numpy.sum(mask) == 0
 
 # draws the lines for tic tac toe
 def getGameBoard():
     board = numpy.empty((FRAME_H, FRAME_W, 3))
-    board[:] = (255, 255, 255)
-    cv2.line(board, (FRAME_W/3, 0), (FRAME_W/3, FRAME_H), (0, 0, 0), (LINE_THICKNESS))
-    cv2.line(board, (2*FRAME_W/3, 0), (2*FRAME_W/3, FRAME_H), (0, 0, 0), (LINE_THICKNESS))
-    cv2.line(board, (0, FRAME_H/3), (FRAME_W, FRAME_H/3), (0, 0, 0), (LINE_THICKNESS))
-    cv2.line(board, (0, 2*FRAME_H/3), (FRAME_W, 2*FRAME_H/3), (0, 0, 0), (LINE_THICKNESS))
+    board[:] = BOARD_COLOR
+    cv2.line(board, (FRAME_W/3, 0), (FRAME_W/3, FRAME_H), ALTERNATE_COLOR, (LINE_THICKNESS))
+    cv2.line(board, (2*FRAME_W/3, 0), (2*FRAME_W/3, FRAME_H), ALTERNATE_COLOR, (LINE_THICKNESS))
+    cv2.line(board, (0, FRAME_H/3), (FRAME_W, FRAME_H/3), ALTERNATE_COLOR, (LINE_THICKNESS))
+    cv2.line(board, (0, 2*FRAME_H/3), (FRAME_W, 2*FRAME_H/3), ALTERNATE_COLOR, (LINE_THICKNESS))
     return board
 
 # gets the bounding box from the corners of the rectified frame
@@ -95,10 +118,11 @@ def getRectifiedImg(capture, M, box):
 # use a sequence of dots to obtain a homography and the outline of the board
 def calibrateCamera(device):
 
-    white_grid = numpy.empty((FRAME_H, FRAME_W, 3))
-    white_grid[:] = (255,255,255)
+    blank_grid = numpy.empty((FRAME_H, FRAME_W, 3))
+    blank_grid[:] = ALTERNATE_COLOR
 
-    cv2.imshow('calibration', white_grid)
+    cv2.imshow('calibration', blank_grid)
+    cv2.moveWindow("calibration", 100, 300)
     cv2.waitKey(-1)
     
     circles = [(OFFSET, OFFSET), (FRAME_W/2, OFFSET), (FRAME_W-OFFSET, OFFSET), \
@@ -118,18 +142,24 @@ def calibrateCamera(device):
     for circle in circles:
 
         dot_grid = numpy.empty((FRAME_W, FRAME_H, 3))
-        dot_grid[:] = (255,255,255)
-        cv2.circle(dot_grid, circle, CALIBRATE_SIZE, (0,0,0), -1)
+        dot_grid[:] = ALTERNATE_COLOR
+        cv2.circle(dot_grid, circle, CALIBRATE_SIZE, BOARD_COLOR, -1)
         
-        cv2.imshow('calibration', white_grid)
 
         #for now, this will be the stable blank image we use
+        cv2.imshow('calibration', blank_grid)
         blank_frame = waitForStabilization(device)
-        cv2.waitKey(10)
+        #cv2.waitKey(10)
 
         cv2.imshow("calibration", dot_grid)
         dot_frame = waitForStabilization(device)
-        cv2.waitKey(100)
+        #cv2.waitKey(100)
+
+        # cv2.imshow("calibration", blank_frame)
+        # cv2.waitKey(-1)
+
+        # cv2.imshow("calibration", dot_frame)
+        # cv2.waitKey(-1)
 
         #background subtraction
         diff = blank_frame.astype('float') - dot_frame.astype('float')
@@ -147,6 +177,8 @@ def calibrateCamera(device):
         # Find the contours in the image
         contours = cv2.findContours(mask, cv2.RETR_CCOMP,
                         cv2.CHAIN_APPROX_SIMPLE)
+
+
 
         #get info from contours
         if contours[0] != []:
@@ -170,6 +202,8 @@ def calibrateCamera(device):
     #now we get a homography using collected points
     homography = cv2.findHomography(numpy.array(image_points), \
         numpy.array(circle_floats))
+
+    print homography[0], numpy.array(trans_corners)
 
     #return the homography and the boundaries of the board
     return homography[0], numpy.array(trans_corners)
